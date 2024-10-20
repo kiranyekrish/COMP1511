@@ -1,4 +1,4 @@
-// cs_moonlander.c
+\// cs_moonlander.c
 // Written by KIRAN KRISH (z5600259),
 // on 12-10-2024
 // TODO: Program Description
@@ -245,7 +245,7 @@ void handle_turn(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], char
     else if (command == 'a') move_player(p, board, LEFT);
     else if (command == 's') move_player(p, board, DOWN);
     else if (command == 'd') move_player(p, board, RIGHT);
-    else if (command == 'q') printf("Command not recognised!\n");
+    else printf("Command not recognised!\n");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
