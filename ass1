@@ -16,6 +16,8 @@
 #define COMMAND_QUIT 'q'
 
 // TODO: Your #defines go here
+#define INITIAL_OXY_LEVEL 20.0
+#define MAX_CHEESE 10
 
 // Provided Enum Definitions
 enum entity {
@@ -28,14 +30,25 @@ enum entity {
     PORTAL
 };
 
-// TODO: Your enums go here
+enum direction {
+    UP,
+    DOWN,
+    LEFT,
+    RIGHT
+};
 
 // Provided Struct Definitions
 struct tile {
     enum entity entity;
 };
 
-// TODO: Your structs go here
+struct player {
+    int row;
+    int col;
+    int cheese_held;
+    double oxy_level;
+    double oxy_capacity;
+};
 
 // Provided Function Prototypes
 void init_board(
@@ -66,12 +79,22 @@ void place_lander(struct tile board[BOARD_LEN][BOARD_LEN]);
 void place_cheese_and_rocks(struct tile board[BOARD_LEN][BOARD_LEN]);
 int is_valid_tile(int row, int col, int rows, int cols, struct tile board[rows][cols]);
 void place_large_rock(int start_row, int start_col, int end_row, int end_col, int rows, int cols, struct tile board[rows][cols]);
+void setup_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN]);
+void move_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], enum direction dir);
+void handle_turn(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], char command);
 
 int main(void) {
     struct tile board[BOARD_LEN][BOARD_LEN];
+    struct player p;
     init_board(board);
     place_lander(board);
     place_cheese_and_rocks(board);
+    setup_player(&p, board);
+
+    char command;
+    while (scanf(" %c", &command) != EOF) {
+        handle_turn(&p, board, command);
+    }
 
     return 0;
 }
@@ -108,6 +131,9 @@ void place_cheese_and_rocks(struct tile board[BOARD_LEN][BOARD_LEN]) {
     printf("Please enter cheese and rock locations:\n");
 
     while (scanf(" %c", &command) != EOF) {
+        if (command == COMMAND_QUIT) {
+            break;
+        }
         if (command == 'c') {
             scanf("%d %d", &row, &col);
             if (!is_valid_coordinate(row, col) || board[row][col].entity != EMPTY) {
@@ -156,6 +182,70 @@ void place_large_rock(int start_row, int start_col, int end_row, int end_col, in
             board[i][j].entity = ROCK;
         }
     }
+}
+
+void setup_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN]) {
+    int target_qty_cheese;
+    printf("Please enter the target qty of cheese: ");
+    while (scanf("%d", &target_qty_cheese) && target_qty_cheese < 0) {
+        printf("The target qty of cheese must be >= 0!\n");
+    }
+
+    double oxy_capacity;
+    printf("Please enter the player's oxygen tank capacity: ");
+    while (scanf("%lf", &oxy_capacity) && oxy_capacity < 0) {
+        printf("The oxygen tank capacity must be >= 0!\n");
+    }
+
+    int player_row, player_col;
+    printf("Please enter the [row] [col] of the player: ");
+    while (scanf("%d %d", &player_row, &player_col) &&
+           (!is_valid_coordinate(player_row, player_col) || board[player_row][player_col].entity != EMPTY)) {
+        printf("That is not a valid player placement!\n");
+    }
+
+    p->row = player_row;
+    p->col = player_col;
+    p->cheese_held = 0;
+    p->oxy_capacity = oxy_capacity;
+    p->oxy_level = oxy_capacity;
+
+    printf("<->        STARTING MOONLANDER        <->\n");
+    print_board(board, p->row, p->col, p->cheese_held, 0, p->oxy_capacity, p->oxy_level, BASE_OXY_RATE);
+}
+
+void move_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], enum direction dir) {
+    int new_row = p->row;
+    int new_col = p->col;
+
+    if (dir == UP) new_row--;
+    else if (dir == DOWN) new_row++;
+    else if (dir == LEFT) new_col--;
+    else if (dir == RIGHT) new_col++;
+
+    if (!is_valid_coordinate(new_row, new_col) || board[new_row][new_col].entity == ROCK) {
+        printf("That is not a valid move!\n");
+        return;
+    }
+
+    p->row = new_row;
+    p->col = new_col;
+
+    if (board[new_row][new_col].entity == CHEESE) {
+        p->cheese_held++;
+        board[new_row][new_col].entity = EMPTY;
+    }
+
+    p->oxy_level -= BASE_OXY_RATE;
+    print_board(board, p->row, p->col, p->cheese_held, 0, p->oxy_capacity, p->oxy_level, BASE_OXY_RATE);
+}
+
+void handle_turn(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], char command) {
+    if (command == 'w') move_player(p, board, UP);
+    else if (command == 'a') move_player(p, board, LEFT);
+    else if (command == 's') move_player(p, board, DOWN);
+    else if (command == 'd') move_player(p, board, RIGHT);
+    else if (command == 'q') printf("Command not recognised!\n");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
