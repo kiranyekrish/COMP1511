@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <ctype.h>
+#include <stdlib.h>
 
 // Provided Constant Definitions
 #define BOARD_LEN 10
@@ -48,6 +49,8 @@ struct player {
     int cheese_held;
     double oxy_level;
     double oxy_capacity;
+    int lander_row;
+    int lander_col;
 };
 
 // Provided Function Prototypes
@@ -75,19 +78,20 @@ void print_player_stats(
 
 // TODO: Your function prototypes go here
 int is_valid_coordinate(int row, int col);
-void place_lander(struct tile board[BOARD_LEN][BOARD_LEN]);
+void place_lander(struct tile board[BOARD_LEN][BOARD_LEN], struct player *p);
 void place_cheese_and_rocks(struct tile board[BOARD_LEN][BOARD_LEN]);
 int is_valid_tile(int row, int col, int rows, int cols, struct tile board[rows][cols]);
 void place_large_rock(int start_row, int start_col, int end_row, int end_col, int rows, int cols, struct tile board[rows][cols]);
 void setup_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN]);
 void move_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], enum direction dir);
 void handle_turn(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], char command);
+void refill_oxygen_if_near_lander(struct player *p);
 
 int main(void) {
     struct tile board[BOARD_LEN][BOARD_LEN];
     struct player p;
     init_board(board);
-    place_lander(board);
+    place_lander(board, &p);
     place_cheese_and_rocks(board);
     setup_player(&p, board);
 
@@ -108,7 +112,7 @@ int is_valid_coordinate(int row, int col) {
     return row >= 0 && row < BOARD_LEN && col >= 0 && col < BOARD_LEN;
 }
 
-void place_lander(struct tile board[BOARD_LEN][BOARD_LEN]) {
+void place_lander(struct tile board[BOARD_LEN][BOARD_LEN], struct player *p) {
     int lander_row, lander_col;
 
     printf("Please enter the [row] [col] of the lander: ");
@@ -120,6 +124,8 @@ void place_lander(struct tile board[BOARD_LEN][BOARD_LEN]) {
     }
 
     board[lander_row][lander_col].entity = LANDER;
+    p->lander_row = lander_row;
+    p->lander_col = lander_col;
 
     print_board(board, INVALID_INDEX, INVALID_INDEX, 0, 0, 0.0, 0.0, BASE_OXY_RATE);
 }
@@ -223,7 +229,7 @@ void move_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], enum
     else if (dir == LEFT) new_col--;
     else if (dir == RIGHT) new_col++;
 
-    if (!is_valid_coordinate(new_row, new_col) || board[new_row][new_col].entity == ROCK) {
+    if (!is_valid_coordinate(new_row, new_col) || board[new_row][new_col].entity == ROCK || board[new_row][new_col].entity == LANDER) {
         printf("That is not a valid move!\n");
         return;
     }
@@ -237,6 +243,7 @@ void move_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], enum
     }
 
     p->oxy_level -= BASE_OXY_RATE;
+    refill_oxygen_if_near_lander(p);
     print_board(board, p->row, p->col, p->cheese_held, 0, p->oxy_capacity, p->oxy_level, BASE_OXY_RATE);
 }
 
@@ -246,6 +253,12 @@ void handle_turn(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], char
     else if (command == 's') move_player(p, board, DOWN);
     else if (command == 'd') move_player(p, board, RIGHT);
     else printf("Command not recognised!\n");
+}
+
+void refill_oxygen_if_near_lander(struct player *p) {
+    if (abs(p->row - p->lander_row) <= 1 && abs(p->col - p->lander_col) <= 1) {
+        p->oxy_level = p->oxy_capacity;
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
