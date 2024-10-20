@@ -64,6 +64,8 @@ void print_player_stats(
 int is_valid_coordinate(int row, int col);
 void place_lander(struct tile board[BOARD_LEN][BOARD_LEN]);
 void place_cheese_and_rocks(struct tile board[BOARD_LEN][BOARD_LEN]);
+int is_valid_tile(int row, int col, int rows, int cols, struct tile board[rows][cols]);
+void place_large_rock(int start_row, int start_col, int end_row, int end_col, int rows, int cols, struct tile board[rows][cols]);
 
 int main(void) {
     struct tile board[BOARD_LEN][BOARD_LEN];
@@ -100,23 +102,60 @@ void place_lander(struct tile board[BOARD_LEN][BOARD_LEN]) {
 }
 
 void place_cheese_and_rocks(struct tile board[BOARD_LEN][BOARD_LEN]) {
-    int row, col;
+    int row, col, start_row, start_col, end_row, end_col;
     char command;
 
     printf("Please enter cheese and rock locations:\n");
 
-    while (scanf(" %c %d %d", &command, &row, &col) == 3) {
-        if (is_valid_coordinate(row, col)) {
-            if (tolower(command) == 'c') {
+    while (scanf(" %c", &command) != EOF) {
+        if (command == 'c') {
+            scanf("%d %d", &row, &col);
+            if (!is_valid_coordinate(row, col) || board[row][col].entity != EMPTY) {
+                printf("That is not a valid cheese placement!\n");
+            } else {
                 board[row][col].entity = CHEESE;
-            } else if (tolower(command) == 'r') {
+            }
+        } else if (command == 'r') {
+            scanf("%d %d", &row, &col);
+            if (!is_valid_coordinate(row, col) || board[row][col].entity != EMPTY) {
+                printf("That is not a valid rock placement!\n");
+            } else {
                 board[row][col].entity = ROCK;
             }
+        } else if (command == 'R') {
+            scanf("%d %d %d %d", &start_row, &start_col, &end_row, &end_col);
+            place_large_rock(start_row, start_col, end_row, end_col, BOARD_LEN, BOARD_LEN, board);
         }
     }
 
-    // After input, call print_board with default values
     print_board(board, INVALID_INDEX, INVALID_INDEX, 0, 0, 0.0, 0.0, BASE_OXY_RATE);
+}
+
+int is_valid_tile(int row, int col, int rows, int cols, struct tile board[rows][cols]) {
+    if (row < 0 || row >= rows || col < 0 || col >= cols || board[row][col].entity != EMPTY) {
+        return 0;
+    }
+    return 1;
+}
+
+void place_large_rock(int start_row, int start_col, int end_row, int end_col, int rows, int cols, struct tile board[rows][cols]) {
+    if (start_row > end_row || start_col > end_col) {
+        printf("That is not a valid rock placement!\n");
+        return;
+    }
+    for (int i = start_row; i <= end_row; i++) {
+        for (int j = start_col; j <= end_col; j++) {
+            if (!is_valid_tile(i, j, rows, cols, board)) {
+                printf("That is not a valid rock placement!\n");
+                return;
+            }
+        }
+    }
+    for (int i = start_row; i <= end_row; i++) {
+        for (int j = start_col; j <= end_col; j++) {
+            board[i][j].entity = ROCK;
+        }
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
