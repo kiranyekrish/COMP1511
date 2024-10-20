@@ -1,4 +1,4 @@
-\// cs_moonlander.c
+// cs_moonlander.c
 // Written by KIRAN KRISH (z5600259),
 // on 12-10-2024
 // TODO: Program Description
