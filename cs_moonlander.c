@@ -236,7 +236,7 @@ void move_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], enum
     else if (dir == RIGHT) new_col++;
 
     if (!is_valid_coordinate(new_row, new_col) || board[new_row][new_col].entity == ROCK || board[new_row][new_col].entity == LANDER) {
-        printf("That is not a valid move!\n");
+        print_board(board, p->row, p->col, p->cheese_held, 0, p->oxy_capacity, p->oxy_level, BASE_OXY_RATE);
         return;
     }
 
@@ -249,7 +249,9 @@ void move_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], enum
     }
 
     p->oxy_level -= BASE_OXY_RATE;
+
     refill_oxygen_if_near_lander(p);
+
     print_board(board, p->row, p->col, p->cheese_held, 0, p->oxy_capacity, p->oxy_level, BASE_OXY_RATE);
 }
 
