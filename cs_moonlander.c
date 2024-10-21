@@ -83,8 +83,8 @@ void place_cheese_and_rocks(struct tile board[BOARD_LEN][BOARD_LEN]);
 int is_valid_tile(int row, int col, int rows, int cols, struct tile board[rows][cols]);
 void place_large_rock(int start_row, int start_col, int end_row, int end_col, int rows, int cols, struct tile board[rows][cols]);
 void setup_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN]);
-void move_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], enum direction dir);
-void handle_turn(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], char command);
+void move_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], enum direction dir, int *cheese_lander);
+void handle_turn(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], char command, int *cheese_lander);
 void refill_oxygen_if_near_lander(struct player *p);
 int is_near_lander(struct player *p);
 void drop_cheese_at_lander(struct player *p, int *cheese_lander);
@@ -101,7 +101,7 @@ int main(void) {
 
     char command;
     while (scanf(" %c", &command) != EOF) {
-        handle_turn(&p, board, command);
+        handle_turn(&p, board, command, &cheese_lander);
         if (is_near_lander(&p)) {
             drop_cheese_at_lander(&p, &cheese_lander);
         }
@@ -226,7 +226,7 @@ void setup_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN]) {
     print_board(board, p->row, p->col, p->cheese_held, 0, p->oxy_capacity, p->oxy_level, BASE_OXY_RATE);
 }
 
-void move_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], enum direction dir) {
+void move_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], enum direction dir, int *cheese_lander) {
     int new_row = p->row;
     int new_col = p->col;
 
@@ -236,7 +236,7 @@ void move_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], enum
     else if (dir == RIGHT) new_col++;
 
     if (!is_valid_coordinate(new_row, new_col) || board[new_row][new_col].entity == ROCK || board[new_row][new_col].entity == LANDER) {
-        print_board(board, p->row, p->col, p->cheese_held, 0, p->oxy_capacity, p->oxy_level, BASE_OXY_RATE);
+        print_board(board, p->row, p->col, p->cheese_held, *cheese_lander, p->oxy_capacity, p->oxy_level, BASE_OXY_RATE);
         return;
     }
 
@@ -250,16 +250,19 @@ void move_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], enum
 
     p->oxy_level -= BASE_OXY_RATE;
 
-    refill_oxygen_if_near_lander(p);
+    if (is_near_lander(p)) {
+        drop_cheese_at_lander(p, cheese_lander);
+        refill_oxygen_if_near_lander(p);
+    }
 
-    print_board(board, p->row, p->col, p->cheese_held, 0, p->oxy_capacity, p->oxy_level, BASE_OXY_RATE);
+    print_board(board, p->row, p->col, p->cheese_held, *cheese_lander, p->oxy_capacity, p->oxy_level, BASE_OXY_RATE);
 }
 
-void handle_turn(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], char command) {
-    if (command == 'w') move_player(p, board, UP);
-    else if (command == 'a') move_player(p, board, LEFT);
-    else if (command == 's') move_player(p, board, DOWN);
-    else if (command == 'd') move_player(p, board, RIGHT);
+void handle_turn(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], char command, int *cheese_lander) {
+    if (command == 'w') move_player(p, board, UP, cheese_lander);
+    else if (command == 'a') move_player(p, board, LEFT, cheese_lander);
+    else if (command == 's') move_player(p, board, DOWN, cheese_lander);
+    else if (command == 'd') move_player(p, board, RIGHT, cheese_lander);
     else printf("Command not recognised!\n");
 }
 
