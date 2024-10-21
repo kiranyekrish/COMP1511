@@ -51,6 +51,7 @@ struct player {
     double oxy_capacity;
     int lander_row;
     int lander_col;
+    int target_qty_cheese; // Added this field
 };
 
 // Provided Function Prototypes
@@ -88,6 +89,7 @@ void handle_turn(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], char
 void refill_oxygen_if_near_lander(struct player *p);
 int is_near_lander(struct player *p);
 void drop_cheese_at_lander(struct player *p, int *cheese_lander);
+void check_game_end_conditions(struct player *p, int cheese_lander); // Added this function prototype
 
 int main(void) {
     struct tile board[BOARD_LEN][BOARD_LEN];
@@ -101,10 +103,14 @@ int main(void) {
 
     char command;
     while (scanf(" %c", &command) != EOF) {
+        if (command == COMMAND_QUIT) {
+            break;
+        }
         handle_turn(&p, board, command, &cheese_lander);
         if (is_near_lander(&p)) {
             drop_cheese_at_lander(&p, &cheese_lander);
         }
+        check_game_end_conditions(&p, cheese_lander);
     }
 
     return 0;
@@ -203,6 +209,8 @@ void setup_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN]) {
         printf("The target qty of cheese must be >= 0!\n");
     }
 
+    p->target_qty_cheese = target_qty_cheese; // Store target cheese
+
     double oxy_capacity;
     printf("Please enter the player's oxygen tank capacity: ");
     while (scanf("%lf", &oxy_capacity) && oxy_capacity < 0) {
@@ -279,6 +287,20 @@ int is_near_lander(struct player *p) {
 void drop_cheese_at_lander(struct player *p, int *cheese_lander) {
     *cheese_lander += p->cheese_held;
     p->cheese_held = 0;
+}
+
+void check_game_end_conditions(struct player *p, int cheese_lander) {
+    // Check if the player has won
+    if (cheese_lander >= p->target_qty_cheese) {
+        printf("Congratulations, you won!\n");
+        exit(0);
+    }
+
+    // Check if the player has lost
+    if (p->oxy_level <= 0) {
+        printf("Sorry, you ran out of oxygen and lost!\n");
+        exit(0);
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
