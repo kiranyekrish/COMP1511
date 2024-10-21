@@ -49,6 +49,7 @@ struct player {
     int cheese_held;
     double oxy_level;
     double oxy_capacity;
+    double oxy_rate;
     int lander_row;
     int lander_col;
     int target_qty_cheese; // Added this field
@@ -86,10 +87,12 @@ void place_large_rock(int start_row, int start_col, int end_row, int end_col, in
 void setup_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN]);
 void move_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], enum direction dir, int *cheese_lander);
 void handle_turn(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], char command, int *cheese_lander);
+void handle_moonquake(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], int *cheese_lander);
 void refill_oxygen_if_near_lander(struct player *p);
 int is_near_lander(struct player *p);
 void drop_cheese_at_lander(struct player *p, int *cheese_lander);
 void check_game_end_conditions(struct player *p, int cheese_lander); // Added this function prototype
+void rotate_board_90_clockwise(struct tile board[BOARD_LEN][BOARD_LEN]);
 
 int main(void) {
     struct tile board[BOARD_LEN][BOARD_LEN];
@@ -107,9 +110,6 @@ int main(void) {
             break;
         }
         handle_turn(&p, board, command, &cheese_lander);
-        if (is_near_lander(&p)) {
-            drop_cheese_at_lander(&p, &cheese_lander);
-        }
         check_game_end_conditions(&p, cheese_lander);
     }
 
@@ -229,9 +229,10 @@ void setup_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN]) {
     p->cheese_held = 0;
     p->oxy_capacity = oxy_capacity;
     p->oxy_level = oxy_capacity;
+    p->oxy_rate = BASE_OXY_RATE; // Initialize oxygen rate
 
     printf("<->        STARTING MOONLANDER        <->\n");
-    print_board(board, p->row, p->col, p->cheese_held, 0, p->oxy_capacity, p->oxy_level, BASE_OXY_RATE);
+    print_board(board, p->row, p->col, p->cheese_held, 0, p->oxy_capacity, p->oxy_level, p->oxy_rate);
 }
 
 void move_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], enum direction dir, int *cheese_lander) {
@@ -244,7 +245,7 @@ void move_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], enum
     else if (dir == RIGHT) new_col++;
 
     if (!is_valid_coordinate(new_row, new_col) || board[new_row][new_col].entity == ROCK || board[new_row][new_col].entity == LANDER) {
-        print_board(board, p->row, p->col, p->cheese_held, *cheese_lander, p->oxy_capacity, p->oxy_level, BASE_OXY_RATE);
+        print_board(board, p->row, p->col, p->cheese_held, *cheese_lander, p->oxy_capacity, p->oxy_level, p->oxy_rate);
         return;
     }
 
@@ -256,13 +257,13 @@ void move_player(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], enum
         board[new_row][new_col].entity = EMPTY;
     }
 
-    p->oxy_level -= BASE_OXY_RATE;
+    p->oxy_level -= p->oxy_rate;
 
+    // Refill oxygen and repair suit if near the lander
     if (is_near_lander(p)) {
         drop_cheese_at_lander(p, cheese_lander);
         refill_oxygen_if_near_lander(p);
     }
-
     print_board(board, p->row, p->col, p->cheese_held, *cheese_lander, p->oxy_capacity, p->oxy_level, BASE_OXY_RATE);
 }
 
@@ -271,12 +272,43 @@ void handle_turn(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], char
     else if (command == 'a') move_player(p, board, LEFT, cheese_lander);
     else if (command == 's') move_player(p, board, DOWN, cheese_lander);
     else if (command == 'd') move_player(p, board, RIGHT, cheese_lander);
+    else if (command == 'm') handle_moonquake(p, board, cheese_lander); // Added moonquake command
     else printf("Command not recognised!\n");
+}
+
+void handle_moonquake(struct player *p, struct tile board[BOARD_LEN][BOARD_LEN], int *cheese_lander) {
+    // Rotate the board
+    rotate_board_90_clockwise(board);
+
+    // Adjust player's position
+    int new_row = p->col;
+    int new_col = BOARD_LEN - 1 - p->row;
+    p->row = new_row;
+    p->col = new_col;
+
+    // Decrement oxygen level by 20% of the tank's maximum capacity
+    p->oxy_level -= p->oxy_capacity * 0.2;
+
+    // Ensure oxygen level does not drop below zero
+    if (p->oxy_level < 0) {
+        p->oxy_level = 0;
+    }
+
+    // Increase oxygen consumption rate by 20%
+    p->oxy_rate *= 1.2;
+
+    // Refill oxygen and repair suit if near the lander
+    refill_oxygen_if_near_lander(p);
+
+    // Print the board after all effects
+    print_board(board, p->row, p->col, p->cheese_held, *cheese_lander, p->oxy_capacity, p->oxy_level, p->oxy_rate);
 }
 
 void refill_oxygen_if_near_lander(struct player *p) {
     if (abs(p->row - p->lander_row) <= 1 && abs(p->col - p->lander_col) <= 1) {
         p->oxy_level = p->oxy_capacity;
+        p->oxy_rate = BASE_OXY_RATE; // Reset oxygen rate when near the lander
+        p->cheese_held = 0; // Drop off all held cheese
     }
 }
 
@@ -300,6 +332,22 @@ void check_game_end_conditions(struct player *p, int cheese_lander) {
     if (p->oxy_level <= 0) {
         printf("Sorry, you ran out of oxygen and lost!\n");
         exit(0);
+    }
+}
+
+void rotate_board_90_clockwise(struct tile board[BOARD_LEN][BOARD_LEN]) {
+    struct tile temp[BOARD_LEN][BOARD_LEN];
+
+    for (int row = 0; row < BOARD_LEN; row++) {
+        for (int col = 0; col < BOARD_LEN; col++) {
+            temp[col][BOARD_LEN - 1 - row] = board[row][col];
+        }
+    }
+
+    for (int row = 0; row < BOARD_LEN; row++) {
+        for (int col = 0; col < BOARD_LEN; col++) {
+            board[row][col] = temp[row][col];
+        }
     }
 }
 
