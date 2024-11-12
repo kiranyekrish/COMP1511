@@ -467,9 +467,50 @@ int insert_dungeon(struct map *map, char *name, enum monster_type monster,
 }
 
 void print_dungeon(struct map *map) {
-    // TODO: implement this function
-    printf("Print Dungeon not yet implemented.\n");
-    exit(1);
+    struct dungeon *current = map->entrance;
+
+    // Traverse the dungeons to find the one containing the player
+    while (current != NULL) {
+        if (current->contains_player) {
+            break;
+        }
+        current = current->next;
+    }
+
+    // Check if the dungeon containing the player was found
+    if (current == NULL) {
+        printf("Player is not in any dungeon.\n");
+        return;
+    }
+
+    // Print the details of the current dungeon
+    printf("======Dungeon Details======\n");
+    printf("%s is currently in %s\n", map->player->name, current->name);
+
+    // Print the number of monsters
+    if (current->monster == WOLF) {
+        printf("There are %d wolves\n", current->num_monsters);
+    } else {
+        printf("There are %d %ss\n", current->num_monsters, 
+               monster_string(current->monster));
+    }
+
+    // Print boss details
+    if (current->boss == NULL) {
+        printf("No boss in this dungeon\n");
+    } else {
+        printf("The boss is in this dungeon\n");
+        printf("\tHealth Points: %d\n", current->boss->health_points);
+        printf("\tDamage: %d\n", current->boss->damage);
+        printf("\tPoints: %d\n", current->boss->points);
+        printf("\tRequired Item: %s\n", 
+               item_string(current->boss->required_item));
+    }
+
+    // Print items in the dungeon
+    printf("The dungeon %s has the following items:\n", current->name);
+    // No items at this stage
+    print_no_items(); 
 }
 
 int move_player(struct map *map, char command) {
