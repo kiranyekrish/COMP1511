@@ -363,11 +363,107 @@ void player_stats(struct map *map) {
 
 // Provided function stubs:
 
+// Helper function to check for duplicate dungeon name
+int check_duplicate_name(struct dungeon *entrance, char *name) {
+    struct dungeon *current = entrance;
+    while (current != NULL) {
+        if (strncmp(current->name, name, MAX_STR_LEN) == 0) {
+            return INVALID_NAME;
+        }
+        current = current->next;
+    }
+    return VALID;
+}
+
+// Helper function to check for valid monster type
+int check_valid_monster(enum monster_type monster) {
+    if (monster != SLIME && monster != GOBLIN &&
+        monster != SKELETON && monster != WOLF) {
+        return INVALID_MONSTER;
+    }
+    return VALID;
+}
+
+// Helper function to check for valid number of monsters
+int check_valid_num_monsters(int num_monsters) {
+    if (num_monsters < MIN_MONSTERS || num_monsters > MAX_MONSTERS) {
+        return INVALID_AMOUNT;
+    }
+    return VALID;
+}
+
+// Helper function to create a new dungeon and insert at the head
+void insert_at_head(struct map *map, struct dungeon *new_dungeon) {
+    new_dungeon->next = map->entrance;
+    map->entrance = new_dungeon;
+    new_dungeon->contains_player = 1;
+
+    // Update the previous entrance to not contain the player
+    if (new_dungeon->next != NULL) {
+        new_dungeon->next->contains_player = 0;
+    }
+}
+
+// Helper function to traverse to a specific position in the dungeon list
+struct dungeon *traverse_to_position(struct dungeon *entrance, int position, 
+                                     struct dungeon **prev) {
+    struct dungeon *current = entrance;
+    int current_position = 1;
+    while (current != NULL && current_position < position) {
+        *prev = current;
+        current = current->next;
+        current_position++;
+    }
+    return current;
+}
+
 int insert_dungeon(struct map *map, char *name, enum monster_type monster,
                    int num_monsters, int position) {
-    // TODO: implement this function
-    printf("Insert Dungeon not yet implemented.\n");
-    exit(1);
+    // Check for invalid position
+    if (position < 1) {
+        return INVALID_POSITION;
+    }
+
+    // Check for duplicate name
+    int result = check_duplicate_name(map->entrance, name);
+    if (result != VALID) {
+        return result;
+    }
+
+    // Check for valid monster type
+    result = check_valid_monster(monster);
+    if (result != VALID) {
+        return result;
+    }
+
+    // Check for valid number of monsters
+    result = check_valid_num_monsters(num_monsters);
+    if (result != VALID) {
+        return result;
+    }
+
+    // Create the new dungeon
+    struct dungeon *new_dungeon = create_dungeon(name, monster,
+                                                 num_monsters, 0);
+
+    // Special case: inserting at the head (position 1)
+    if (position == 1) {
+        insert_at_head(map, new_dungeon);
+        return VALID;
+    }
+
+    // Traverse to the desired position or the end of the list
+    struct dungeon *prev = NULL;
+    struct dungeon *current = traverse_to_position(map->entrance,
+                                                   position, &prev);
+
+    // Insert the new dungeon
+    new_dungeon->next = current;
+    if (prev != NULL) {
+        prev->next = new_dungeon;
+    }
+
+    return VALID;
 }
 
 void print_dungeon(struct map *map) {
