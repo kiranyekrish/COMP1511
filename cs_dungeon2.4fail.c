@@ -548,70 +548,73 @@ int move_player(struct map *map, char command) {
     return INVALID;
 }
 
-int fight(struct map *map, char command) {
-    struct dungeon *current = map->entrance;
+int monster_health_value(enum monster_type monster) {
+    switch (monster) {
+        case SLIME: return 1;
+        case GOBLIN: return 2;
+        case SKELETON: return 3;
+        case WOLF: return 4;
+        default: return 0;
+    }
+}
 
-    // Find the current dungeon containing the player
-    while (current != NULL && !current->contains_player) {
-        current = current->next;
+int fight(struct map *map, char command) {
+    struct dungeon *current_dungeon = map->entrance;
+    while (current_dungeon != NULL) {
+        if (current_dungeon->contains_player) {
+            break;
+        }
+        current_dungeon = current_dungeon->next;
     }
 
-    // Return INVALID if there are no monsters in the current dungeon
-    if (current == NULL || current->num_monsters == 0) {
+    // No monsters to fight
+    if (current_dungeon == NULL || current_dungeon->num_monsters == 0) {
         return INVALID;
     }
 
-    int player_damage = map->player->damage;
-    if (command == PHYSICAL_ATTACK) {
-        // Physical attack logic
-        current->num_monsters -= player_damage;
-    } else if (command == MAGICAL_ATTACK) {
-        // Magical attack logic with magic modifier
-        current->num_monsters -= (int)(player_damage * map->player->magic_modifier);
+    int attack_power = (command == '!') ? map->player->damage : 
+                                          (int)(map->player->damage * map->player->magic_modifier);
+
+    int monster_health = monster_health_value(current_dungeon->monster);
+    int monsters_defeated = attack_power / monster_health;
+
+    // Limit defeated monsters to the number available
+    if (monsters_defeated > current_dungeon->num_monsters) {
+        monsters_defeated = current_dungeon->num_monsters;
     }
 
-    // Update the current dungeon state based on remaining monsters
-    if (current->num_monsters <= 0) {
-        current->num_monsters = 0; // Ensure non-negative count
-        printf("All monsters in the dungeon have been defeated.\n");
-    }
+    // Update the number of monsters left and add points to the player
+    current_dungeon->num_monsters -= monsters_defeated;
+    map->player->points += monsters_defeated * monster_health;
+
+    printf("A battle has raged!\n");
 
     return VALID;
 }
 
 int end_turn(struct map *map) {
-    struct dungeon *current = map->entrance;
-
-    // Traverse the dungeons to apply end of turn logic
-    while (current != NULL) {
-        if (current->contains_player) {
-            // Apply monster attacks to player
-            if (current->num_monsters > 0) {
-                map->player->health_points -= current->num_monsters * 2; // Example damage calculation
-                if (map->player->health_points <= 0) {
-                    return PLAYER_DEFEATED;
-                }
-            }
-
-            // Boss monster logic
-            if (current->boss != NULL) {
-                map->player->health_points -= current->boss->damage;
-                if (map->player->health_points <= 0) {
-                    return PLAYER_DEFEATED;
-                }
-            }
-
-            // Check if game is won by collecting the win requirement
-            if (map->player->points >= map->win_requirement) {
-                if (current->boss != NULL && current->boss->health_points <= 0) {
-                    return WON_BOSS;
-                } else if (current->num_monsters <= 0) {
-                    return WON_MONSTERS;
-                }
-            }
+    struct dungeon *current_dungeon = map->entrance;
+    while (current_dungeon != NULL) {
+        if (current_dungeon->contains_player) {
+            break;
         }
-        current = current->next;
+        current_dungeon = current_dungeon->next;
     }
+
+    if (current_dungeon == NULL || current_dungeon->num_monsters == 0) {
+        return CONTINUE_GAME;
+    }
+
+    int monster_damage = monster_health_value(current_dungeon->monster);
+    int total_monster_damage = current_dungeon->num_monsters * monster_damage;
+
+    // Apply shielding to total damage
+    int damage_taken = total_monster_damage - map->player->shield_power;
+    if (damage_taken < 0) {
+        damage_taken = 0;
+    }
+
+    map->player->health_points -= damage_taken;
 
     return CONTINUE_GAME;
 }
