@@ -514,9 +514,38 @@ void print_dungeon(struct map *map) {
 }
 
 int move_player(struct map *map, char command) {
-    // TODO: implement this function
-    printf("Move Player not yet implemented.\n");
-    exit(1);
+    struct dungeon *current = map->entrance;
+    struct dungeon *previous = NULL;
+
+    // Find the current dungeon containing the player
+    while (current != NULL && !current->contains_player) {
+        previous = current;
+        current = current->next;
+    }
+
+    // If the player is not in any dungeon, return INVALID
+    if (current == NULL) {
+        return INVALID;
+    }
+
+    if (command == '>') {
+        // Move to the next dungeon
+        if (current->next != NULL) {
+            current->contains_player = 0;
+            current->next->contains_player = 1;
+            return VALID;
+        }
+    } else if (command == '<') {
+        // Move to the previous dungeon
+        if (previous != NULL) {
+            current->contains_player = 0;
+            previous->contains_player = 1;
+            return VALID;
+        }
+    }
+
+    // If there is no adjacent dungeon to move into, return INVALID
+    return INVALID;
 }
 
 int fight(struct map *map, char command) {
