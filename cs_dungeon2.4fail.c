@@ -577,13 +577,11 @@ int fight(struct map *map, char command) {
 
     int monster_health = monster_health_value(current_dungeon->monster);
     int monsters_defeated = attack_power / monster_health;
-
-    // Limit defeated monsters to the number available
     if (monsters_defeated > current_dungeon->num_monsters) {
         monsters_defeated = current_dungeon->num_monsters;
     }
 
-    // Update the number of monsters left and add points to the player
+    // Reduce the number of monsters and add points to the player
     current_dungeon->num_monsters -= monsters_defeated;
     map->player->points += monsters_defeated * monster_health;
 
@@ -608,7 +606,12 @@ int end_turn(struct map *map) {
     int monster_damage = monster_health_value(current_dungeon->monster);
     int total_monster_damage = current_dungeon->num_monsters * monster_damage;
 
-    // Apply shielding to total damage
+    // Wolves attack every turn
+    if (current_dungeon->monster == WOLF || current_dungeon->num_monsters < monster_damage) {
+        total_monster_damage *= current_dungeon->num_monsters;
+    }
+
+    // Apply shielding
     int damage_taken = total_monster_damage - map->player->shield_power;
     if (damage_taken < 0) {
         damage_taken = 0;
