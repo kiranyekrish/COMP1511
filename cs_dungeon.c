@@ -48,13 +48,11 @@ struct dungeon {
     // a pointer to the first item it contains or NULL
     struct item *items;
 
-    // an int indicating if the player is inside the dungeon
-    //      1: The player is inside the dungeon
-    //      0: The player is not inside the dungeon
-    int contains_player;
-
     // a pointer to the next dungeon in the map or NULL
     struct dungeon *next;
+
+    // whether or not the player is inside the dungeon
+    int contains_player;
 };
 
 // Stores information about an item
