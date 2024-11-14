@@ -611,18 +611,67 @@ int class_power(struct map *map) {
 // Provided function stubs:
 
 struct item *create_item(enum item_type type, int points) {
-    // TODO: implement this function
-    printf("Create Item not yet implemented.\n");
-    exit(1);
+    // Dynamically allocate memory to allow for variable-length item lists
+    struct item *new_item = malloc(sizeof(struct item));
+    if (new_item == NULL) {
+        return NULL;
+    }
+    new_item->type = type;
+    new_item->points = points;
+    return new_item;
 }
 
 int add_item(struct map *map,
              int dungeon_number,
              enum item_type type,
              int points) {
-    // TODO: implement this function
-    printf("Add Item not yet implemented.\n");
-    exit(1);
+    if (dungeon_number < 1) {
+        return INVALID_DUNGEON;
+    }
+    
+    // Navigate to the target dungeon by counting positions from the entrance
+    struct dungeon *current_dungeon = map->entrance;
+    for (int i = 1; i < dungeon_number; i++) {
+        if (current_dungeon == NULL) {
+            return INVALID_DUNGEON;
+        }
+        current_dungeon = current_dungeon->next;
+    }
+    
+    if (current_dungeon == NULL) {
+        return INVALID_DUNGEON;
+    }
+
+    if (type < PHYSICAL_WEAPON || type > TREASURE) {
+        return INVALID_ITEM;
+    }
+    
+    if (points < MIN_ITEM_POINT_VALUE || points > MAX_ITEM_POINT_VALUE) {
+        return INVALID_POINTS;
+    }
+    
+    struct item *new_item = create_item(type, points);
+    if (new_item == NULL) {
+        return INVALID_ITEM;
+    }
+    
+    // Maintain sorted order of items by type for consistent inventory display
+    struct item *prev_item = NULL;
+    struct item *current_item = current_dungeon->items;
+    while (current_item != NULL && current_item->type <= type) {
+        prev_item = current_item;
+        current_item = current_item->next;
+    }
+
+    if (prev_item == NULL) {
+        new_item->next = current_dungeon->items;
+        current_dungeon->items = new_item;
+    } else {
+        new_item->next = prev_item->next;
+        prev_item->next = new_item;
+    }
+    
+    return VALID;
 }
 
 int collect_item(struct map *map, int item_number) {
