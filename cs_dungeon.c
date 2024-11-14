@@ -522,24 +522,20 @@ int fight(struct map *map, char command) {
     return VALID;
 }
 
-int end_turn(struct map *map) {
-    struct dungeon *current_dungeon = map->entrance;
-
-    while (current_dungeon != NULL && !current_dungeon->contains_player) {
-        current_dungeon = current_dungeon->next;
-    }
-
-    if (map->player->points >= map->win_requirement) {
-        struct dungeon *dungeon_check = map->entrance;
-        int all_monsters_defeated = 1;
-        while (dungeon_check != NULL) {
-            if (dungeon_check->num_monsters > 0) {
-                all_monsters_defeated = 0;
-                break;
-            }
-            dungeon_check = dungeon_check->next;
+int check_all_monsters_defeated(struct map *map) {
+    struct dungeon *current = map->entrance;
+    while (current != NULL) {
+        if (current->num_monsters > 0) {
+            return 0;
         }
-        if (all_monsters_defeated) {
+        current = current->next;
+    }
+    return 1;
+}
+
+int check_win_conditions(struct map *map, struct dungeon *current_dungeon) {
+    if (map->player->points >= map->win_requirement) {
+        if (check_all_monsters_defeated(map)) {
             return WON_MONSTERS;
         }
 
@@ -549,7 +545,10 @@ int end_turn(struct map *map) {
             return WON_BOSS;
         }
     }
+    return CONTINUE_GAME;
+}
 
+int handle_monster_attacks(struct map *map, struct dungeon *current_dungeon) {
     if (current_dungeon == NULL) {
         return CONTINUE_GAME;
     }
@@ -560,6 +559,8 @@ int end_turn(struct map *map) {
     // contains_player == 2 indicates monsters were attacked this turn
     int has_attacked = (current_dungeon->contains_player == 2);
     int monsters_remain = current_dungeon->num_monsters > 0;
+    
+    // Wolves always attack, other monsters only attack after being attacked
     if (current_dungeon->monster == WOLF || (has_attacked && monsters_remain)) {
         int effective_damage = total_monster_damage - map->player->shield_power;
         if (effective_damage < 0) {
@@ -572,6 +573,62 @@ int end_turn(struct map *map) {
             return PLAYER_DEFEATED;
         }
     }
+    
+    return CONTINUE_GAME;
+}
+
+int is_dungeon_empty(struct dungeon *dungeon) {
+    return !dungeon->contains_player && 
+           dungeon->num_monsters == 0 && 
+           dungeon->items == NULL &&
+           (dungeon->boss == NULL || dungeon->boss->health_points <= 0);
+}
+
+void remove_empty_dungeons(struct map *map) {
+    struct dungeon *prev = NULL;
+    struct dungeon *current = map->entrance;
+    
+    while (current != NULL) {
+        struct dungeon *next = current->next;
+        
+        if (is_dungeon_empty(current)) {
+            if (current->boss != NULL) {
+                free(current->boss);
+            }
+            
+            if (prev == NULL) {
+                map->entrance = next;
+            } else {
+                prev->next = next;
+            }
+            
+            free(current);
+            current = next;
+            continue;
+        }
+        
+        prev = current;
+        current = next;
+    }
+}
+
+int end_turn(struct map *map) {
+    struct dungeon *current_dungeon = map->entrance;
+    while (current_dungeon != NULL && !current_dungeon->contains_player) {
+        current_dungeon = current_dungeon->next;
+    }
+
+    int win_status = check_win_conditions(map, current_dungeon);
+    if (win_status != CONTINUE_GAME) {
+        return win_status;
+    }
+
+    int attack_status = handle_monster_attacks(map, current_dungeon);
+    if (attack_status != CONTINUE_GAME) {
+        return attack_status;
+    }
+
+    remove_empty_dungeons(map);
 
     return CONTINUE_GAME;
 }
@@ -765,7 +822,40 @@ int use_item(struct map *map, int item_number) {
 }
 
 void free_map(struct map *map) {
-    // TODO: implement this function
+    if (map == NULL) {
+        return;
+    }
+
+    struct dungeon *current = map->entrance;
+    while (current != NULL) {
+        struct dungeon *next = current->next;
+        
+        struct item *current_item = current->items;
+        while (current_item != NULL) {
+            struct item *next_item = current_item->next;
+            free(current_item);
+            current_item = next_item;
+        }
+        
+        if (current->boss != NULL) {
+            free(current->boss);
+        }
+        
+        free(current);
+        current = next;
+    }
+
+    if (map->player != NULL) {
+        struct item *current_item = map->player->inventory;
+        while (current_item != NULL) {
+            struct item *next_item = current_item->next;
+            free(current_item);
+            current_item = next_item;
+        }
+        free(map->player);
+    }
+
+    free(map);
 }
 
 // Your functions here (include function comments):
