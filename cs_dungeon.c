@@ -675,9 +675,45 @@ int add_item(struct map *map,
 }
 
 int collect_item(struct map *map, int item_number) {
-    // TODO: implement this function
-    printf("Collect Item not yet implemented.\n");
-    exit(1);
+    if (item_number < 1) {
+        return INVALID_ITEM;
+    }
+
+    struct dungeon *current_dungeon = map->entrance;
+    while (current_dungeon != NULL && !current_dungeon->contains_player) {
+        current_dungeon = current_dungeon->next;
+    }
+
+    if (current_dungeon == NULL) {
+        return INVALID_ITEM;
+    }
+
+    struct item *prev_item = NULL;
+    struct item *current_item = current_dungeon->items;
+    int current_position = 1;
+
+    while (current_item != NULL && current_position < item_number) {
+        prev_item = current_item;
+        current_item = current_item->next;
+        current_position++;
+    }
+
+    if (current_item == NULL) {
+        return INVALID_ITEM;
+    }
+
+    // Remove the item from the dungeon's item list
+    if (prev_item == NULL) {
+        current_dungeon->items = current_item->next;
+    } else {
+        prev_item->next = current_item->next;
+    }
+
+    // Add the item to the player's inventory
+    current_item->next = map->player->inventory;
+    map->player->inventory = current_item;
+
+    return VALID;
 }
 
 int use_item(struct map *map, int item_number) {
