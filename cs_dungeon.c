@@ -702,14 +702,12 @@ int collect_item(struct map *map, int item_number) {
         return INVALID_ITEM;
     }
 
-    // Remove the item from the dungeon's item list
+    // Add item to front of inventory for O(1) insertion
     if (prev_item == NULL) {
         current_dungeon->items = current_item->next;
     } else {
         prev_item->next = current_item->next;
     }
-
-    // Add the item to the player's inventory
     current_item->next = map->player->inventory;
     map->player->inventory = current_item;
 
@@ -717,9 +715,53 @@ int collect_item(struct map *map, int item_number) {
 }
 
 int use_item(struct map *map, int item_number) {
-    // TODO: implement this function
-    printf("Use Item not yet implemented.\n");
-    exit(1);
+    if (item_number < 1) {
+        return INVALID_ITEM;
+    }
+
+    struct item *prev_item = NULL;
+    struct item *current_item = map->player->inventory;
+    int current_position = 1;
+
+    while (current_item != NULL && current_position < item_number) {
+        prev_item = current_item;
+        current_item = current_item->next;
+        current_position++;
+    }
+
+    if (current_item == NULL) {
+        return INVALID_ITEM;
+    }
+
+    // Magical tomes increase magic modifier by 10% of points
+    if (current_item->type == PHYSICAL_WEAPON) {
+        map->player->damage += current_item->points;
+    } else if (current_item->type == MAGICAL_TOME) {
+        map->player->magic_modifier += current_item->points / 10.0;
+        // Armor increases shield power by half of points
+    } else if (current_item->type == ARMOR) {
+        map->player->shield_power += current_item->points / 2;
+    } else if (current_item->type == HEALTH_POTION) {
+        map->player->health_points += current_item->points + 5;
+        if (map->player->health_points > MAX_HEALTH) {
+            map->player->health_points = MAX_HEALTH;
+        }
+    } else if (current_item->type == TREASURE) {
+        // No effect on player stats
+    } else {
+        return INVALID_ITEM;
+    }
+
+    map->player->points += current_item->points;
+
+    if (prev_item == NULL) {
+        map->player->inventory = current_item->next;
+    } else {
+        prev_item->next = current_item->next;
+    }
+    free(current_item);
+
+    return VALID;
 }
 
 void free_map(struct map *map) {
