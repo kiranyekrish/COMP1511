@@ -529,15 +529,35 @@ int end_turn(struct map *map) {
         current_dungeon = current_dungeon->next;
     }
 
-    if (current_dungeon == NULL || current_dungeon->num_monsters == 0) {
+    if (map->player->points >= map->win_requirement) {
+        struct dungeon *dungeon_check = map->entrance;
+        int all_monsters_defeated = 1;
+        while (dungeon_check != NULL) {
+            if (dungeon_check->num_monsters > 0) {
+                all_monsters_defeated = 0;
+                break;
+            }
+            dungeon_check = dungeon_check->next;
+        }
+        if (all_monsters_defeated) {
+            return WON_MONSTERS;
+        }
+
+        if (current_dungeon != NULL && 
+            current_dungeon->boss != NULL && 
+            current_dungeon->boss->health_points <= 0) {
+            return WON_BOSS;
+        }
+    }
+
+    if (current_dungeon == NULL) {
         return CONTINUE_GAME;
     }
 
     int num_monsters = current_dungeon->num_monsters;
     int monster_damage = current_dungeon->monster;
     int total_monster_damage = num_monsters * monster_damage;
-
-    // Monsters attack if they've been attacked or are wolves
+    // contains_player == 2 indicates monsters were attacked this turn
     int has_attacked = (current_dungeon->contains_player == 2);
     int monsters_remain = current_dungeon->num_monsters > 0;
     if (current_dungeon->monster == WOLF || (has_attacked && monsters_remain)) {
