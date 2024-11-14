@@ -94,6 +94,9 @@ struct player {
 
     // the number of points they have collected over the course of the game
     int points;
+
+    // whether or not the player has used their class power
+    int power_used;
 };
 
 
@@ -151,14 +154,9 @@ struct map *create_map(char *name, int win_requirement) {
         exit(1);
     }
 
-    // Copy name and initialize map fields
     strncpy(new_map->name, name, MAX_STR_LEN);
     new_map->win_requirement = win_requirement;
-
-    // Initially, no dungeons in the map
     new_map->entrance = NULL;
-
-    // Player not added yet
     new_map->player = NULL;
 
     return new_map;
@@ -173,11 +171,15 @@ struct player *create_player(char *name, char *class_type) {
     strncpy(new_player->name, name, MAX_STR_LEN);
     strncpy(new_player->class_type, class_type, MAX_STR_LEN);
 
+    // Initialize stats based on class type
+    // Fighter: High health and damage, some shield, low magic
     if (strcmp(class_type, "Fighter") == 0) {
         new_player->health_points = 30;
         new_player->shield_power = 2;
         new_player->damage = 8;
         new_player->magic_modifier = 0.9;
+        
+        // Wizard: Low health, no shield, moderate damage, high magic
     } else if (strcmp(class_type, "Wizard") == 0) {
         new_player->health_points = 15;
         new_player->shield_power = 0;
@@ -185,9 +187,9 @@ struct player *create_player(char *name, char *class_type) {
         new_player->magic_modifier = 1.5;
     }
     
-    // Initially, no items in the inventory
     new_player->inventory = NULL;
     new_player->points = 0;
+    new_player->power_used = 0;
     return new_player;
 }
 
@@ -212,18 +214,15 @@ struct dungeon *create_dungeon(char *name, enum monster_type monster,
     new_dungeon->monster = monster;
     new_dungeon->num_monsters = num_monsters;
     new_dungeon->contains_player = contains_player;
-    // No boss initially
     new_dungeon->boss = NULL;
-    // No items initially
     new_dungeon->items = NULL;
-    // No next dungeon yet
     new_dungeon->next = NULL;
     return new_dungeon;
 }
 
 int append_dungeon(struct map *map, char *name, enum monster_type monster,
                    int num_monsters) {
-    // Check for duplicate name
+    // Check for duplicate name in existing dungeons
     struct dungeon *current = map->entrance;
     while (current != NULL) {
         if (strncmp(current->name, name, MAX_STR_LEN) == 0) {
@@ -232,21 +231,23 @@ int append_dungeon(struct map *map, char *name, enum monster_type monster,
         current = current->next;
     }
 
-    // Check for valid monster type
     if (monster != SLIME && monster != GOBLIN &&
         monster != SKELETON && monster != WOLF) {
         return INVALID_MONSTER;
     }
 
-    // Check for valid number of monsters
     if (num_monsters < MIN_MONSTERS || num_monsters > MAX_MONSTERS) {
         return INVALID_AMOUNT;
     }
 
-    // Determine if this is the first dungeon
-    int contains_player = (map->entrance == NULL) ? 1 : 0;
+    // Player starts in the first dungeon created
+    int contains_player;
+    if (map->entrance == NULL) {
+        contains_player = 1;
+    } else {
+        contains_player = 0;
+    }
 
-    // Create the new dungeon
     struct dungeon *new_dungeon = create_dungeon(name, monster, num_monsters,
                                                  contains_player);
     if (map->entrance == NULL) {
@@ -263,29 +264,24 @@ int append_dungeon(struct map *map, char *name, enum monster_type monster,
 }
 
 void print_map(struct map *map) {
-    // Check if the map is empty
     if (map->entrance == NULL) {
         print_empty_map();
         return;
     }
 
-    // Print the map name
     print_map_name(map->name);
 
-    // Traverse the list of dungeons
     struct dungeon *current = map->entrance;
     int position = 1;
 
     while (current != NULL) {
-        // Print basic details of the current dungeon
         print_basic_dungeon(current, map->player->name, position);
 
-        // Print connection only if there's another dungeon
+        // Only print connection if there's another dungeon after this one
         if (current->next != NULL) {
             print_connection();
         }
 
-        // Move to the next dungeon and update position
         current = current->next;
         position++;
     }
@@ -318,20 +314,17 @@ struct boss *create_boss(int health_points, int damage, int points,
 }
 
 int final_boss(struct map *map, enum item_type required_item) {
-    // Check for valid item type
     if (required_item != PHYSICAL_WEAPON && required_item != MAGICAL_TOME &&
         required_item != ARMOR && required_item != HEALTH_POTION &&
         required_item != TREASURE) {
         return INVALID_ITEM;
     }
 
-    // Find the last dungeon
     struct dungeon *current = map->entrance;
     while (current->next != NULL) {
         current = current->next;
     }
 
-    // Create and assign the boss
     current->boss = create_boss(35, 10, 20, required_item);
     return VALID;
 }
@@ -340,7 +333,7 @@ void player_stats(struct map *map) {
     struct dungeon *current = map->entrance;
     char *dungeon_name = NULL;
 
-    // Traverse the dungeons to find the one containing the player
+    // Find which dungeon currently contains the player
     while (current != NULL) {
         if (current->contains_player) {
             dungeon_name = current->name;
@@ -349,9 +342,19 @@ void player_stats(struct map *map) {
         current = current->next;
     }
 
-    // Print player stats and inventory
     print_player(map->player, dungeon_name);
-    print_no_items();
+
+    if (map->player->inventory == NULL) {
+        print_no_items();
+    } else {
+        struct item *current_item = map->player->inventory;
+        int position = 1;
+        while (current_item != NULL) {
+            print_item(current_item, position);
+            current_item = current_item->next;
+            position++;
+        }
+    }
 }
 
 // Your functions go here (include function comments):
@@ -363,113 +366,65 @@ void player_stats(struct map *map) {
 
 // Provided function stubs:
 
-// Helper function to check for duplicate dungeon name
-int check_duplicate_name(struct dungeon *entrance, char *name) {
-    struct dungeon *current = entrance;
+int insert_dungeon(struct map *map, char *name, enum monster_type monster,
+                   int num_monsters, int position) {
+    if (position < 1) {
+        return INVALID_POSITION;
+    }
+
+    struct dungeon *current = map->entrance;
     while (current != NULL) {
         if (strncmp(current->name, name, MAX_STR_LEN) == 0) {
             return INVALID_NAME;
         }
         current = current->next;
     }
-    return VALID;
-}
 
-// Helper function to check for valid monster type
-int check_valid_monster(enum monster_type monster) {
     if (monster != SLIME && monster != GOBLIN &&
         monster != SKELETON && monster != WOLF) {
         return INVALID_MONSTER;
     }
-    return VALID;
-}
 
-// Helper function to check for valid number of monsters
-int check_valid_num_monsters(int num_monsters) {
     if (num_monsters < MIN_MONSTERS || num_monsters > MAX_MONSTERS) {
         return INVALID_AMOUNT;
     }
-    return VALID;
-}
 
-// Helper function to create a new dungeon and insert at the head
-void insert_at_head(struct map *map, struct dungeon *new_dungeon) {
-    new_dungeon->next = map->entrance;
-    map->entrance = new_dungeon;
-    new_dungeon->contains_player = 1;
+    struct dungeon *new_dungeon = create_dungeon(
+        name,
+        monster,
+        num_monsters,
+        position == 1
+    );
 
-    // Update the previous entrance to not contain the player
-    if (new_dungeon->next != NULL) {
-        new_dungeon->next->contains_player = 0;
-    }
-}
-
-// Helper function to traverse to a specific position in the dungeon list
-struct dungeon *traverse_to_position(struct dungeon *entrance, int position, 
-                                     struct dungeon **prev) {
-    struct dungeon *current = entrance;
-    int current_position = 1;
-    while (current != NULL && current_position < position) {
-        *prev = current;
-        current = current->next;
-        current_position++;
-    }
-    return current;
-}
-
-int insert_dungeon(struct map *map, char *name, enum monster_type monster,
-                   int num_monsters, int position) {
-    // Check for invalid position
-    if (position < 1) {
-        return INVALID_POSITION;
-    }
-
-    // Check for duplicate name
-    int result = check_duplicate_name(map->entrance, name);
-    if (result != VALID) {
-        return result;
-    }
-
-    // Check for valid monster type
-    result = check_valid_monster(monster);
-    if (result != VALID) {
-        return result;
-    }
-
-    // Check for valid number of monsters
-    result = check_valid_num_monsters(num_monsters);
-    if (result != VALID) {
-        return result;
-    }
-
-    // Create the new dungeon
-    struct dungeon *new_dungeon = create_dungeon(name, monster,
-                                                 num_monsters, 0);
-
-    // Special case: inserting at the head (position 1)
     if (position == 1) {
-        insert_at_head(map, new_dungeon);
+        new_dungeon->next = map->entrance;
+        map->entrance = new_dungeon;
+        if (new_dungeon->next != NULL) {
+            new_dungeon->next->contains_player = 0;
+        }
         return VALID;
     }
 
-    // Traverse to the desired position or the end of the list
     struct dungeon *prev = NULL;
-    struct dungeon *current = traverse_to_position(map->entrance,
-                                                   position, &prev);
+    current = map->entrance;
+    int current_position = 1;
+    while (current != NULL && current_position < position) {
+        prev = current;
+        current = current->next;
+        current_position++;
+    }
 
-    // Insert the new dungeon
     new_dungeon->next = current;
     if (prev != NULL) {
         prev->next = new_dungeon;
     }
-
     return VALID;
 }
 
 void print_dungeon(struct map *map) {
     struct dungeon *current = map->entrance;
 
-    // Traverse the dungeons to find the one containing the player
+    // Find the dungeon containing the player
     while (current != NULL) {
         if (current->contains_player) {
             break;
@@ -477,66 +432,46 @@ void print_dungeon(struct map *map) {
         current = current->next;
     }
 
-    // Check if the dungeon containing the player was found
     if (current == NULL) {
         printf("Player is not in any dungeon.\n");
         return;
     }
 
-    // Print the details of the current dungeon
-    printf("======Dungeon Details======\n");
-    printf("%s is currently in %s\n", map->player->name, current->name);
+    print_detail_dungeon(map->player->name, current);
 
-    // Print the number of monsters
-    if (current->monster == WOLF) {
-        printf("There are %d wolves\n", current->num_monsters);
+    struct item *current_item = current->items;
+    int position = 1;
+    if (current_item == NULL) {
+        print_no_items();
     } else {
-        printf("There are %d %ss\n", current->num_monsters, 
-               monster_string(current->monster));
+        while (current_item != NULL) {
+            print_item(current_item, position);
+            current_item = current_item->next;
+            position++;
+        }
     }
-
-    // Print boss details
-    if (current->boss == NULL) {
-        printf("No boss in this dungeon\n");
-    } else {
-        printf("The boss is in this dungeon\n");
-        printf("\tHealth Points: %d\n", current->boss->health_points);
-        printf("\tDamage: %d\n", current->boss->damage);
-        printf("\tPoints: %d\n", current->boss->points);
-        printf("\tRequired Item: %s\n", 
-               item_string(current->boss->required_item));
-    }
-
-    // Print items in the dungeon
-    printf("The dungeon %s has the following items:\n", current->name);
-    // No items at this stage
-    print_no_items(); 
 }
 
 int move_player(struct map *map, char command) {
     struct dungeon *current = map->entrance;
     struct dungeon *previous = NULL;
 
-    // Find the current dungeon containing the player
     while (current != NULL && !current->contains_player) {
         previous = current;
         current = current->next;
     }
 
-    // If the player is not in any dungeon, return INVALID
     if (current == NULL) {
         return INVALID;
     }
 
     if (command == '>') {
-        // Move to the next dungeon
         if (current->next != NULL) {
             current->contains_player = 0;
             current->next->contains_player = 1;
             return VALID;
         }
     } else if (command == '<') {
-        // Move to the previous dungeon
         if (previous != NULL) {
             current->contains_player = 0;
             previous->contains_player = 1;
@@ -544,25 +479,106 @@ int move_player(struct map *map, char command) {
         }
     }
 
-    // If there is no adjacent dungeon to move into, return INVALID
     return INVALID;
 }
 
 int fight(struct map *map, char command) {
-    // TODO: implement this function
-    printf("Fight not yet implemented.\n");
-    exit(1);
+    struct dungeon *current_dungeon = map->entrance;
+
+    while (current_dungeon != NULL && !current_dungeon->contains_player) {
+        current_dungeon = current_dungeon->next;
+    }
+
+    if (current_dungeon == NULL || current_dungeon->num_monsters == 0) {
+        return INVALID;
+    }
+
+    int attack_damage;
+    if (command == PHYSICAL_ATTACK) {
+        attack_damage = map->player->damage;
+    } else if (command == MAGICAL_ATTACK) {
+        attack_damage = map->player->damage * map->player->magic_modifier;
+    } else {
+        return INVALID;
+    }
+
+    int monster_health = current_dungeon->monster;
+    int monsters_defeated = 0;
+
+    while (attack_damage >= monster_health && 
+           current_dungeon->num_monsters > 0) {
+        attack_damage -= monster_health;
+        current_dungeon->num_monsters--;
+        monsters_defeated++;
+    }
+
+    map->player->points += monsters_defeated * monster_health;
+
+    // Use 2 to indicate monsters have been attacked
+    if (current_dungeon->num_monsters > 0) {
+        current_dungeon->contains_player = 2;
+    }
+
+    return VALID;
 }
 
 int end_turn(struct map *map) {
-    // TODO: implement this function
+    struct dungeon *current_dungeon = map->entrance;
+
+    while (current_dungeon != NULL && !current_dungeon->contains_player) {
+        current_dungeon = current_dungeon->next;
+    }
+
+    if (current_dungeon == NULL || current_dungeon->num_monsters == 0) {
+        return CONTINUE_GAME;
+    }
+
+    int num_monsters = current_dungeon->num_monsters;
+    int monster_damage = current_dungeon->monster;
+    int total_monster_damage = num_monsters * monster_damage;
+
+    // Monsters attack if they've been attacked or are wolves
+    int has_attacked = (current_dungeon->contains_player == 2);
+    int monsters_remain = current_dungeon->num_monsters > 0;
+    if (current_dungeon->monster == WOLF || (has_attacked && monsters_remain)) {
+        int effective_damage = total_monster_damage - map->player->shield_power;
+        if (effective_damage < 0) {
+            effective_damage = 0;
+        }
+
+        map->player->health_points -= effective_damage;
+
+        if (map->player->health_points <= 0) {
+            return PLAYER_DEFEATED;
+        }
+    }
+
     return CONTINUE_GAME;
 }
 
 int class_power(struct map *map) {
-    // TODO: implement this function
-    printf("Class Power not yet implemented.\n");
-    exit(1);
+    if (map->player->power_used) {
+        return INVALID;
+    }
+
+    struct dungeon *current = map->entrance;
+    while (current != NULL && !current->contains_player) {
+        current = current->next;
+    }
+
+    if (strcmp(map->player->class_type, "Fighter") == 0) {
+        // Permanent damage boost to help with tougher enemies
+        map->player->damage = (int)(map->player->damage * 1.5);
+    } else if (strcmp(map->player->class_type, "Wizard") == 0) {
+        // Clear room with magic but cannot affect bosses
+        if (current != NULL) {
+            map->player->points += current->num_monsters * current->monster;
+            current->num_monsters = 0;
+        }
+    }
+
+    map->player->power_used = 1;
+    return VALID;
 }
 
 // Your functions go here (include function comments):
