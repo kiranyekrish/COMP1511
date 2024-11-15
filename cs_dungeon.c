@@ -1,12 +1,28 @@
 // Assignment 2 24T3 COMP1511: CS Dungeon
 // cs_dungeon.c
 //
-// This program was written by Kiran Krish, z5600259
+// This program was written by Kiran Krish (z5600259)
 // on 12-11-2024
 //
 // Version 1.0.0: Assignment released.
 //
-// <DESCRIPTION OF YOUR PROGRAM HERE>
+// This program simulates a dungeon exploration game where a player navigates
+// dungeons, fights monsters, collects items, and aims to defeat a final boss.
+//
+// Overview:
+// - The program defines several structures to represent the game entities:
+//   dungeons, items, players, and bosses.
+// - It provides functions to create and manage these entities, including
+//   adding dungeons to the map, moving the player, and handling combat.
+// - The game logic includes conditions for winning or losing based on the
+//   player's actions and the state of the dungeons.
+//
+// Limitations:
+// - The boss fight functionality is not yet implemented.
+//
+// References:
+// - The program uses standard C libraries and follows the specifications
+//   provided in the assignment documentation.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -53,6 +69,9 @@ struct dungeon {
 
     // whether or not the player is inside the dungeon
     int contains_player;
+
+    // whether or not the dungeon has been teleported to
+    int teleported;
 };
 
 // Stores information about an item
@@ -215,6 +234,7 @@ struct dungeon *create_dungeon(char *name, enum monster_type monster,
     new_dungeon->boss = NULL;
     new_dungeon->items = NULL;
     new_dungeon->next = NULL;
+    new_dungeon->teleported = 0;
     return new_dungeon;
 }
 
@@ -866,9 +886,54 @@ void free_map(struct map *map) {
 // Provided function stubs:
 
 int teleport(struct map *map) {
-    // TODO: implement this function
-    printf("Teleport not yet implemented.\n");
-    exit(1);
+    if (map->entrance == NULL || map->entrance->next == NULL) {
+        return INVALID;
+    }
+
+    struct dungeon *current = map->entrance;
+    int current_pos = 1;
+    while (current != NULL && !current->contains_player) {
+        current = current->next;
+        current_pos++;
+    }
+
+    if (current == NULL) {
+        return INVALID;
+    }
+    // Keep current marked as visited
+    current->teleported = 1;
+
+    struct dungeon *temp = map->entrance;
+    struct dungeon *furthest = NULL;
+    int temp_pos = 1, max_distance = -1;
+
+    while (temp != NULL) {
+        if (!temp->teleported) {
+            int distance = abs(current_pos - temp_pos);
+            // If equal distance, earlier dungeon is kept due to > comparison
+            if (distance > max_distance) {
+                max_distance = distance;
+                furthest = temp;
+            }
+        }
+        temp = temp->next;
+        temp_pos++;
+    }
+
+    if (furthest == NULL) {
+        temp = map->entrance;
+        while (temp != NULL) {
+            temp->teleported = (temp == current);
+            temp = temp->next;
+        }
+        return teleport(map);
+    }
+
+    current->contains_player = 0;
+    furthest->contains_player = 1;
+    furthest->teleported = 1;
+
+    return VALID;
 }
 
 int boss_fight(struct map *map) {
