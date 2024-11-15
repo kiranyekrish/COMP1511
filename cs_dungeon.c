@@ -17,9 +17,6 @@
 // - The game logic includes conditions for winning or losing based on the
 //   player's actions and the state of the dungeons.
 //
-// Limitations:
-// - The boss fight functionality is not yet implemented.
-//
 // References:
 // - The program uses standard C libraries and follows the specifications
 //   provided in the assignment documentation.
@@ -630,15 +627,52 @@ void remove_empty_dungeons(struct map *map) {
     }
 }
 
+int handle_boss_combat(struct boss *boss, struct player *player) {
+    int damage = boss->damage;
+    // Enrage at 50% health
+    if (boss->health_points <= 17) {
+        damage = (int)(damage * 1.5);
+    }
+    int effective_damage = damage - player->shield_power;
+    if (effective_damage > 0) {
+        player->health_points -= effective_damage;
+    }
+    
+    if (player->health_points <= 0) {
+        return PLAYER_DEFEATED;
+    }
+    return CONTINUE_GAME;
+}
+
+void move_boss_towards_player(struct dungeon *boss_dungeon, int boss_pos, 
+                            int player_pos, struct map *map) {
+    struct dungeon *next = boss_dungeon->next;
+    struct dungeon *prev = NULL;
+    struct dungeon *current = map->entrance;
+    
+    while (current != boss_dungeon && current != NULL) {
+        prev = current;
+        current = current->next;
+    }
+
+    struct boss *temp_boss = boss_dungeon->boss;
+    boss_dungeon->boss = NULL;
+    
+    if (boss_pos < player_pos && next != NULL) {
+        next->boss = temp_boss;
+    } else if (boss_pos > player_pos && prev != NULL) {
+        prev->boss = temp_boss;
+    } else {
+        boss_dungeon->boss = temp_boss;
+    }
+}
+
 int handle_boss_movement(struct map *map) {
     struct dungeon *current = map->entrance;
     struct dungeon *boss_dungeon = NULL;
     struct dungeon *player_dungeon = NULL;
-    int boss_pos = 0;
-    int player_pos = 0;
-    int pos = 0;
+    int boss_pos = 0, player_pos = 0, pos = 0;
 
-    // Find boss and player positions
     while (current != NULL) {
         pos++;
         if (current->boss != NULL && current->boss->health_points > 0) {
@@ -652,51 +686,18 @@ int handle_boss_movement(struct map *map) {
         current = current->next;
     }
 
-    // If boss exists and isn't at full health (has been attacked)
     if (boss_dungeon != NULL && boss_dungeon->boss->health_points < 35) {
-        // If boss and player are in same dungeon, attack
         if (boss_dungeon == player_dungeon) {
-            int damage = boss_dungeon->boss->damage;
-            // Increase damage if boss health is <= 50%
-            if (boss_dungeon->boss->health_points <= 17) {
-                damage = (int)(damage * 1.5);
-            }
-            // Apply shield power reduction
-            int effective_damage = damage - map->player->shield_power;
-            if (effective_damage > 0) {
-                map->player->health_points -= effective_damage;
-            }
+            return handle_boss_combat(boss_dungeon->boss, map->player);
         } else {
-            // Move boss towards player if not in same dungeon
-            struct dungeon *next = boss_dungeon->next;
-            struct dungeon *prev = NULL;
-            
-            // Find previous dungeon
-            current = map->entrance;
-            while (current != boss_dungeon && current != NULL) {
-                prev = current;
-                current = current->next;
-            }
-
-            // Move boss forward or backward based on player position
-            if (boss_pos < player_pos && next != NULL) {
-                struct boss *temp_boss = boss_dungeon->boss;
-                boss_dungeon->boss = NULL;
-                next->boss = temp_boss;
-            } else if (boss_pos > player_pos && prev != NULL) {
-                struct boss *temp_boss = boss_dungeon->boss;
-                boss_dungeon->boss = NULL;
-                prev->boss = temp_boss;
-            }
+            move_boss_towards_player(boss_dungeon, boss_pos, player_pos, map);
         }
     }
 
-    // Check if player has been defeated
     if (map->player->health_points <= 0) {
         return PLAYER_DEFEATED;
-    } else {
-        return CONTINUE_GAME;
     }
+    return CONTINUE_GAME;
 }
 
 int end_turn(struct map *map) {
@@ -705,28 +706,38 @@ int end_turn(struct map *map) {
         current_dungeon = current_dungeon->next;
     }
 
-    // Check win conditions first
-    int win_status = check_win_conditions(map, current_dungeon);
-    if (win_status != CONTINUE_GAME) {
-        return win_status;
-    }
-
-    // Handle monster attacks
+    // Turn sequence:
+    // 1. Player action (already happened before this function)
+    // 2. Monster attacks
     int attack_status = handle_monster_attacks(map, current_dungeon);
     if (attack_status != CONTINUE_GAME) {
         return attack_status;
     }
 
-    // Remove empty dungeons
+    // 3. Clean up empty dungeons
     remove_empty_dungeons(map);
 
-    // Handle boss movement and attacks
+    // 4. Boss movement/attack phase
     int boss_status = handle_boss_movement(map);
     if (boss_status != CONTINUE_GAME) {
         return boss_status;
     }
 
-    // Check win conditions again after boss fight
+    // 5. Check victory conditions
+    struct dungeon *boss_dungeon = map->entrance;
+    while (boss_dungeon != NULL) {
+        // If boss was just defeated, award points and clean up
+        if (boss_dungeon->boss != NULL && 
+            boss_dungeon->boss->health_points <= 0) {
+            print_boss_defeat();
+            map->player->points += boss_dungeon->boss->points;
+            free(boss_dungeon->boss);
+            boss_dungeon->boss = NULL;
+            return WON_BOSS;
+        }
+        boss_dungeon = boss_dungeon->next;
+    }
+
     return check_win_conditions(map, current_dungeon);
 }
 
@@ -1015,19 +1026,64 @@ int teleport(struct map *map) {
     return VALID;
 }
 
+void swap_dungeon_properties(struct dungeon *dungeon_a, 
+                           struct dungeon *dungeon_b) {
+    char temp_name[MAX_STR_LEN];
+    strncpy(temp_name, dungeon_a->name, MAX_STR_LEN);
+    strncpy(dungeon_a->name, dungeon_b->name, MAX_STR_LEN);
+    strncpy(dungeon_b->name, temp_name, MAX_STR_LEN);
+
+    enum monster_type temp_monster = dungeon_a->monster;
+    dungeon_a->monster = dungeon_b->monster;
+    dungeon_b->monster = temp_monster;
+
+    int temp_num = dungeon_a->num_monsters;
+    dungeon_a->num_monsters = dungeon_b->num_monsters;
+    dungeon_b->num_monsters = temp_num;
+
+    struct boss *temp_boss = dungeon_a->boss;
+    dungeon_a->boss = dungeon_b->boss;
+    dungeon_b->boss = temp_boss;
+
+    struct item *temp_items = dungeon_a->items;
+    dungeon_a->items = dungeon_b->items;
+    dungeon_b->items = temp_items;
+
+    int temp_contains = dungeon_a->contains_player;
+    dungeon_a->contains_player = dungeon_b->contains_player;
+    dungeon_b->contains_player = temp_contains;
+
+    dungeon_a->teleported = 0;
+    dungeon_b->teleported = 0;
+}
+
+void shuffle_dungeons(struct map *map) {
+    struct dungeon *current_pair = map->entrance;
+    while (current_pair != NULL && current_pair->next != NULL) {
+        swap_dungeon_properties(current_pair, current_pair->next);
+        current_pair = current_pair->next->next;
+    }
+}
+
+double calculate_player_damage(struct player *player) {
+    double physical_damage = player->damage;
+    double magical_damage = player->damage * player->magic_modifier;
+    if (magical_damage >= physical_damage) {
+        return magical_damage;
+    }
+    return physical_damage;
+}
+
 int boss_fight(struct map *map) {
-    // Find current dungeon
     struct dungeon *current = map->entrance;
     while (current != NULL && !current->contains_player) {
         current = current->next;
     }
 
-    // Check if there's a boss in current dungeon
     if (current == NULL || current->boss == NULL) {
         return NO_BOSS;
     }
 
-    // Check if player has required item
     struct item *inventory = map->player->inventory;
     int has_required_item = 0;
     while (inventory != NULL) {
@@ -1042,76 +1098,14 @@ int boss_fight(struct map *map) {
         return NO_ITEM;
     }
 
-    // Calculate damage
-    double physical_damage = map->player->damage;
-    double magical_damage = map->player->damage * map->player->magic_modifier;
-    double damage;
-    if (magical_damage >= physical_damage) {
-        damage = magical_damage;
-    } else {
-        damage = physical_damage;
-    }
-
-    // Store boss pointer and initial health before shuffling
+    double damage = calculate_player_damage(map->player);
     struct boss *current_boss = current->boss;
     int original_health = current_boss->health_points;
-    
-    // Apply damage to boss
     current_boss->health_points -= damage;
 
-    // Check if boss is defeated before shuffling
-    int boss_defeated = current_boss->health_points <= 0;
-    if (boss_defeated) {
-        map->player->points += current_boss->points;
-        // Free the boss memory
-        free(current_boss);
-        current->boss = NULL;
-    }
-
-    // First hit: shuffle dungeons
-    if (original_health == 35) { // Initial boss health
-        struct dungeon *d1 = map->entrance;
-        while (d1 != NULL && d1->next != NULL) {
-            struct dungeon *d2 = d1->next;
-            
-            // Swap dungeon contents
-            char temp_name[MAX_STR_LEN];
-            strncpy(temp_name, d1->name, MAX_STR_LEN);
-            strncpy(d1->name, d2->name, MAX_STR_LEN);
-            strncpy(d2->name, temp_name, MAX_STR_LEN);
-
-            enum monster_type temp_monster = d1->monster;
-            d1->monster = d2->monster;
-            d2->monster = temp_monster;
-
-            int temp_num = d1->num_monsters;
-            d1->num_monsters = d2->num_monsters;
-            d2->num_monsters = temp_num;
-
-            struct boss *temp_boss = d1->boss;
-            d1->boss = d2->boss;
-            d2->boss = temp_boss;
-
-            struct item *temp_items = d1->items;
-            d1->items = d2->items;
-            d2->items = temp_items;
-
-            int temp_contains = d1->contains_player;
-            d1->contains_player = d2->contains_player;
-            d2->contains_player = temp_contains;
-
-            // Reset teleport history
-            d1->teleported = 0;
-            d2->teleported = 0;
-
-            // Move to next pair
-            d1 = d1->next->next;
-        }
-    }
-
-    // Print boss defeat message after shuffling if boss was defeated
-    if (boss_defeated) {
-        print_boss_defeat();
+    // On first hit, shuffle all adjacent dungeon pairs
+    if (original_health == 35) {
+        shuffle_dungeons(map);
     }
 
     return VALID;
